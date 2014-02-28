@@ -6,4 +6,7 @@ lambda:
 main:
 	rustc -L . main.rs
 
-.PHONY: main lambda
+test:
+	rustc -L . test.rs --cfg test && ./test
+
+.PHONY: main lambda test
