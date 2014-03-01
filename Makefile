@@ -1,4 +1,4 @@
-all: lambda main
+all: lambda main doc
 
 lambda:
 	rustc lambda.rs
@@ -9,4 +9,7 @@ main:
 test:
 	rustc -L . test.rs --cfg test && ./test
 
-.PHONY: main lambda test
+doc:
+	rustdoc lambda.rs
+
+.PHONY: main lambda test doc

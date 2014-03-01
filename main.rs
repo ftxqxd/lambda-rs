@@ -4,9 +4,6 @@ use std::io::stdin;
 use lambda::LambdaExpr;
 
 fn main() {
-    let code = stdin().read_line().unwrap();
-    let parsed: LambdaExpr = from_str(code).unwrap();
-    //println!("{:?}", parsed.clone());
-    let converted = parsed.clone().reduce();
-    println!("{}", converted.clone().into_str());
+    let expr: Option<LambdaExpr> = from_str(stdin().read_line().unwrap());
+    println!("{}", expr.unwrap().reduce().into_str());
 }
