@@ -6,28 +6,28 @@ macro_rules! str {
     }
 }
 
-pub fn tokenise(s: &str) -> ~[~str] { 
-    let mut tokens: ~[~str] = ~[]; 
-    let mut buf = ~""; 
-    for c in s.chars() { 
-        match c { 
-            '\\' | 'λ' | '.' | '(' | ')' => { 
-                if buf != ~"" { tokens.push(buf); } 
-                buf = ~""; 
-                tokens.push(str!(c)); 
-            }, 
-            ' ' | '\t' | '\n' | '\r' => { 
-                if buf != ~"" { tokens.push(buf); } 
-                buf = ~""; 
-                continue; 
-            }, 
-            _ => { 
-                buf = buf + str!(c); 
-            }, 
-        }; 
-    } 
-    if buf != ~"" { tokens.push(buf); } 
-    tokens 
+pub fn tokenise(s: &str) -> ~[~str] {
+    let mut tokens: ~[~str] = ~[];
+    let mut buf = ~"";
+    for c in s.chars() {
+        match c {
+            '\\' | 'λ' | '.' | '(' | ')' => {
+                if buf != ~"" { tokens.push(buf); }
+                buf = ~"";
+                tokens.push(format!("{}", c));
+            },
+            ' ' | '\t' | '\n' | '\r' => {
+                if buf != ~"" { tokens.push(buf); }
+                buf = ~"";
+                continue;
+            },
+            _ => {
+                buf = buf + str!(c);
+            },
+        };
+    }
+    if buf != ~"" { tokens.push(buf); }
+    tokens
 }
 
 pub fn parse<T: Iterator<~str>>(toki: &mut T)
@@ -56,7 +56,7 @@ pub fn parse<T: Iterator<~str>>(toki: &mut T)
                         let mut rm = r;
                         for v in vars.iter().rev() {
                             match *v {
-                                Some(_) => 
+                                Some(_) =>
                                     rm = Lambda(v.clone().unwrap(), 0, ~rm),
                                 None => return Err(
                                             (~"unexpected end of file", res)),
@@ -67,7 +67,7 @@ pub fn parse<T: Iterator<~str>>(toki: &mut T)
                 };
                 for v in vars.iter().rev() {
                     match *v {
-                        Some(_) => 
+                        Some(_) =>
                             currexpr = Lambda(v.clone().unwrap(), 0, ~currexpr),
                         None => return Err(
                                     (~"unexpected end of file", res)),

@@ -27,15 +27,9 @@
 
 use std::from_str::FromStr;
 
-// TODO: fix (func \l.l 0 0)
+// TODO: fix `func \l.l 0 0`
 
 mod parse;
-
-macro_rules! str {
-    ($a:expr) => {
-        format!("{}", $a)
-    }
-}
 
 /// A λ-calculus expression.
 #[deriving(Eq, Clone)]
@@ -217,9 +211,9 @@ impl IntoStr for LambdaExpr {
     /// Convert a `LambdaExpr` into a string, consuming it in the process.
     ///
     /// The syntax for such a string is the same as for `from_str`, but
-    /// prefers to use `λ` in lambda declarations (rather than `\`) and
+    /// prefers to use `λ` in lambda declarations (rather than `\`);
     /// does not use special names for constants, using their fully expanded
-    /// form instead.
+    /// form instead; and fully parenthesises all expressions.
     fn into_str(self) -> ~str {
         match self {
             Nothing => ~"",

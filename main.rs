@@ -4,7 +4,11 @@ use std::io::stdin;
 use lambda::LambdaExpr;
 
 fn main() {
-    let expr: Option<LambdaExpr> = from_str(stdin().read_line().unwrap());
-    // println!("{:?}", expr.clone().unwrap());
-    println!("{}", expr.unwrap().reduce().into_str());
+    let expr: LambdaExpr = from_str(stdin().read_line().unwrap()).unwrap();
+    debug!("{:?}", expr);
+    debug!("Alpha: {:?}", expr.alpha_rename());
+    debug!("Beta:  {:?}", expr.alpha_rename().beta_reduce());
+    debug!("Eta:   {:?}", expr.alpha_rename().eta_convert());
+    debug!("All:   {:?}", expr.reduce());
+    println!("{}", expr.reduce().into_str());
 }
