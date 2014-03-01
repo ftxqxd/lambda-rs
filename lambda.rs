@@ -4,10 +4,12 @@
 
 //! A basic parser/reducer for the λ-calculus.
 //!
-//! To parse a λ-calculus expression, use `from_str` (re-exported in
-//! `std::prelude`). Reducing a λ-calculus expression is done using
-//! `LambdaExpr::reduce`. To convert a `LambdaExpr` to a `~str`, use
-//! `LambdaExpr::into_str`.
+//! To parse a λ-calculus expression, use
+//! [`LambdaExpr::`](enum.LambdaExpr.html)[`from_str`](enum.LambdaExpr.html#method.from_str).
+//! Reducing a λ-calculus expression is done by using
+//! [`LambdaExpr::`](enum.LambdaExpr.html)[`reduce`](enum.LambdaExpr.html#method.reduce).
+//! To convert a [`LambdaExpr`](enum.LambdaExpr.html) to a `~str`, use
+//! [`LambdaExpr::`](enum.LambdaExpr.html)[`into_str`](enum.LambdaExpr.html#method.into_str).
 //!
 //! Example usage:
 //!
@@ -22,6 +24,8 @@
 //!     println!("{}", expr.unwrap().reduce().into_str());
 //! }
 //! ~~~
+
+use std::from_str::FromStr;
 
 // TODO: fix (func \l.l 0 0)
 
@@ -57,18 +61,6 @@ pub enum LambdaExpr {
 }
 
 impl LambdaExpr {
-    fn traverse(&self, f: |&LambdaExpr|) {
-        match *self {
-            Nothing => (),
-            Variable(_, _) => (),
-            Call(ref a, ref b) => {
-                a.traverse(|x| f(x));
-                b.traverse(|x| f(x));
-            },
-            Lambda(_, _, ref e) => e.traverse(|x| f(x)),
-        };
-        if *self != Nothing { f(self) }
-    }
     fn traverse_mut(&mut self, f: |&mut LambdaExpr|) {
         match *self {
             Nothing => (),

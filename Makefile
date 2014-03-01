@@ -1,6 +1,7 @@
 all: lambda main doc
 
 lambda:
+	rm liblambda-*
 	rustc lambda.rs
 
 main:

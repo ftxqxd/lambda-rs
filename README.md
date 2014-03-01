@@ -16,7 +16,7 @@ Syntax
 
 The syntax for expressions, as parsed by `from_str`, is as follows:
 
-```rust
+```
 expr ::= <lambda> | <IDENT> | <call> | '(' <expr> ')'
 lambda ::= ('\\' | 'λ') <IDENT>+ '.' <expr>
 call ::= <expr> <expr>
