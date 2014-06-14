@@ -1,48 +1,43 @@
-extern crate lambda;
+use super::{LambdaExpr, Variable, Lambda, Call};
 
-#[cfg(test)]
-mod test {
-    use lambda::{LambdaExpr, Variable, Lambda, Call};
+#[test]
+fn test_parse() {
+    let e: Option<LambdaExpr> = from_str("\\x.(\\y z.(x y z))");
+    assert_eq!(e, Some(Lambda("x".to_string(), 0, box Lambda("y".to_string(), 0, box Lambda("z".to_string(), 0,
+        box Call(box Call(box Variable("x".to_string(), 0), box Variable("y".to_string(), 0)),
+            box Variable("z".to_string(), 0)))))));
+}
 
-    #[test]
-    fn test_parse() {
-        let e: Option<LambdaExpr> = from_str("\\x.(\\y z.(x y z))");
-        assert_eq!(e, Some(Lambda(~"x", 0, ~Lambda(~"y", 0, ~Lambda(~"z", 0,
-            ~Call(~Call(~Variable(~"x", 0), ~Variable(~"y", 0)),
-                ~Variable(~"z", 0)))))));
-    }
+#[test]
+fn test_alpha_rename() {
+    assert_eq!(Call(box Lambda("x".to_string(), 0i16, box Call(box Lambda("x".to_string(), 0i16,
+                box Variable("x".to_string(), 0i16)), box Variable("x".to_string(), 0i16))),
+                box Variable("x".to_string(), 0i16)).alpha_rename(),
+               Call(box Lambda("x".to_string(), 1i16, box Call(box Lambda("x".to_string(), 2i16,
+                box Variable("x".to_string(), 2i16)), box Variable("x".to_string(), 1i16))),
+                box Variable("x".to_string(), 0i16)));
+}
 
-    #[test]
-    fn test_alpha_rename() {
-        assert_eq!(Call(~Lambda(~"x", 0i16, ~Call(~Lambda(~"x", 0i16,
-                    ~Variable(~"x", 0i16)), ~Variable(~"x", 0i16))),
-                    ~Variable(~"x", 0i16)).alpha_rename(),
-                   Call(~Lambda(~"x", 1i16, ~Call(~Lambda(~"x", 2i16,
-                    ~Variable(~"x", 2i16)), ~Variable(~"x", 1i16))),
-                    ~Variable(~"x", 0i16)));
-    }
+#[test]
+fn test_beta_reduce() {
+    assert_eq!(Call(box Lambda("x".to_string(), 0i16, box Call(box Variable("f".to_string(), 0i16),
+                box Variable("x".to_string(), 0i16))),
+                box Variable("a".to_string(), 0i16)).beta_reduce(),
+               Call(box Variable("f".to_string(), 0i16), box Variable("a".to_string(), 0i16)));
+}
 
-    #[test]
-    fn test_beta_reduce() {
-        assert_eq!(Call(~Lambda(~"x", 0i16, ~Call(~Variable(~"f", 0i16),
-                    ~Variable(~"x", 0i16))),
-                    ~Variable(~"a", 0i16)).beta_reduce(),
-                   Call(~Variable(~"f", 0i16), ~Variable(~"a", 0i16)));
-    }
-    
-    #[test]
-    fn test_eta_convert() {
-        assert_eq!(Lambda(~"x", 0i16, ~Call(~Variable(~"f", 0i16),
-                    ~Variable(~"x", 0i16))).eta_convert(),
-                   Variable(~"f", 0i16));
-    }
+// #[test]
+// fn test_eta_convert() {
+//     assert_eq!(Lambda("x".to_string(), 0i16, box Call(box Variable("f".to_string(), 0i16),
+//                 box Variable("x".to_string(), 0i16))).eta_convert(),
+//                Variable("f".to_string(), 0i16));
+// }
 
-    #[test]
-    fn test_reduce() {
-        assert_eq!(Call(~Lambda(~"f", 0i16, ~Call(~Lambda(~"f", 0i16,
-                    ~Lambda(~"x", 0i16, ~Call(~Variable(~"f", 0i16),
-                    ~Variable(~"x", 0i16)))), ~Variable(~"f", 0i16))),
-                    ~Variable(~"a", 0i16)).reduce(),
-                   Variable(~"a", 0i16));
-    }
+#[test]
+fn test_reduce() {
+    assert_eq!(Call(box Lambda("f".to_string(), 0i16, box Call(box Lambda("f".to_string(), 0i16,
+                box Lambda("x".to_string(), 0i16, box Call(box Variable("f".to_string(), 0i16),
+                box Variable("x".to_string(), 0i16)))), box Variable("f".to_string(), 0i16))),
+                box Variable("a".to_string(), 0i16)).reduce(),
+               Variable("a".to_string(), 0i16));
 }

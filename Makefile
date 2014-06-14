@@ -1,16 +1,17 @@
 all: lambda main doc
 
-lambda:
-	rm liblambda-*
+lambda: liblambda-*
+
+liblambda-*: lambda.rs parse.rs
 	rustc lambda.rs
 
-main:
+main: liblambda-* main.rs
 	rustc -L . main.rs
 
-test:
-	rustc -L . test.rs --cfg test && ./test
+test: lambda.rs parse.rs test.rs
+	rustc -L . lambda.rs --cfg test && ./test
 
-doc:
+doc: liblambda-*
 	rustdoc lambda.rs
 
-.PHONY: main lambda test doc
+.PHONY: lambda

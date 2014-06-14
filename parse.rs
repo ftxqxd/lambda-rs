@@ -6,47 +6,47 @@ macro_rules! str {
     }
 }
 
-pub fn tokenise(s: &str) -> ~[~str] {
-    let mut tokens: ~[~str] = ~[];
-    let mut buf = ~"";
+pub fn tokenise(s: &str) -> Vec<String> {
+    let mut tokens = vec![];
+    let mut buf = "".to_string();
     for c in s.chars() {
         match c {
             '\\' | 'λ' | '.' | '(' | ')' => {
-                if buf != ~"" { tokens.push(buf); }
-                buf = ~"";
+                if buf != String::new() { tokens.push(buf); }
+                buf = String::new();
                 tokens.push(format!("{}", c));
             },
             ' ' | '\t' | '\n' | '\r' => {
-                if buf != ~"" { tokens.push(buf); }
-                buf = ~"";
+                if buf != String::new() { tokens.push(buf); }
+                buf = String::new();
                 continue;
             },
             _ => {
-                buf = buf + str!(c);
+                buf = buf.append(str!(c).as_slice());
             },
         };
     }
-    if buf != ~"" { tokens.push(buf); }
+    if buf != String::new() { tokens.push(buf); }
     tokens
 }
 
-pub fn parse<T: Iterator<~str>>(toki: &mut T)
-                            -> Result<LambdaExpr, (~str, LambdaExpr)> {
+pub fn parse<'a, T: Iterator<&'a str>>(toki: &mut T)
+                                  -> Result<LambdaExpr, (String, LambdaExpr)> {
     let mut tok = toki.next();
     let mut res = Nothing;
     while tok.is_some() {
         let next = match tok {
-            Some(~"\\") | Some(~"λ") => {
-                let mut vars = ~[];
+            Some("\\") | Some("λ") => {
+                let mut vars = vec![];
                 let mut varname = toki.next();
-                while varname.is_some() && varname != Some(~".") {
+                while varname.is_some() && varname != Some(".") {
                     vars.push(varname.clone());
                     varname = toki.next();
                 }
                 let dot = varname.clone();
-                if dot != Some(~".") {
+                if dot != Some(".") {
                     return Err((format!("expected `.`, found `{}`",
-                                        dot.unwrap_or(~"end of file")),
+                                        dot.unwrap_or("end of file")),
                                res));
                 }
                 let subexpr = parse(toki);
@@ -57,9 +57,9 @@ pub fn parse<T: Iterator<~str>>(toki: &mut T)
                         for v in vars.iter().rev() {
                             match *v {
                                 Some(_) =>
-                                    rm = Lambda(v.clone().unwrap(), 0, ~rm),
+                                    rm = Lambda(v.clone().unwrap().to_string(), 0, box rm),
                                 None => return Err(
-                                            (~"unexpected end of file", res)),
+                                            ("unexpected end of file".to_string(), res)),
                             }
                         }
                         return Err((msg, rm));
@@ -68,52 +68,53 @@ pub fn parse<T: Iterator<~str>>(toki: &mut T)
                 for v in vars.iter().rev() {
                     match *v {
                         Some(_) =>
-                            currexpr = Lambda(v.clone().unwrap(), 0, ~currexpr),
+                            currexpr = Lambda(v.clone().unwrap().to_string(), 0, box currexpr),
                         None => return Err(
-                                    (~"unexpected end of file", res)),
+                                    ("unexpected end of file".to_string(), res)),
                     }
                 }
                 currexpr
             },
-            Some(~".") => return Err((~"unexpected `.`", res)),
-            Some(~"(") => {
+            Some(".") => return Err(("unexpected `.`".to_string(), res)),
+            Some("(") => {
                 let thing = parse(toki);
                 let res2 = match thing {
                     Ok(x) => x,
-                    Err((~"unexpected `)`", r)) => r,
-                    Err(_) => return thing,
+                    Err((s, r)) => 
+                        if s.as_slice() == "unexpected `)`" { r }
+                        else { return Err((s.to_string(), r)) }
                 };
                 res2
             },
-            Some(~")") => return Err((~"unexpected `)`", res)),
-            Some(~"T") => Lambda(~"x", 0, ~Lambda(~"y", 0, ~Variable(~"x", 0))),
-            Some(~"F") => Lambda(~"x", 0, ~Lambda(~"y", 0, ~Variable(~"y", 0))),
-            Some(~"S") => Lambda(~"w", 0, ~Lambda(~"y", 0, ~Lambda(~"x", 0, ~Call(~Variable(~"y", 0), ~Call(~Call(~Variable(~"w", 0), ~Variable(~"y", 0)), ~Variable(~"x", 0)))))),
-            Some(~"Z") => Lambda(~"x", 0i16, ~Call(~Call(~Call(~Variable(~"x", 0i16), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"y", 0i16)))), ~Lambda(~"x", 0i16, ~Call(~Call(~Variable(~"x", 0i16), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"y", 0i16)))), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"x", 0i16)))))), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"y", 0i16))))),
-            Some(~"*") => Lambda(~"x", 0, ~Lambda(~"y", 0, ~Lambda(~"z", 0, ~Call(~Variable(~"x", 0), ~Call(~Variable(~"y", 0), ~Variable(~"z", 0)))))),
-            Some(~"&") => Lambda(~"x", 0, ~Lambda(~"y", 0, ~Call(~Call(~Variable(~"x", 0), ~Variable(~"y", 0)), ~Lambda(~"x", 0, ~Lambda(~"y", 0, ~Variable(~"y", 0)))))),
-            Some(~"|") => Lambda(~"x", 0, ~Lambda(~"y", 0, ~Call(~Call(~Variable(~"x", 0), ~Lambda(~"x", 0, ~Lambda(~"y", 0, ~Variable(~"x", 0)))), ~Variable(~"y", 0)))),
-            Some(~"!") => Lambda(~"x", 0i16, ~Call(~Call(~Variable(~"x", 0i16), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"y", 0i16)))), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"x", 0i16))))),
-            Some(~"Y") => Lambda(~"y", 0i16, ~Call(~Lambda(~"x", 0i16, ~Call(~Variable(~"y", 0i16), ~Call(~Variable(~"x", 0i16), ~Variable(~"x", 0i16)))), ~Lambda(~"x", 0i16, ~Call(~Variable(~"y", 0i16), ~Call(~Variable(~"x", 0i16), ~Variable(~"x", 0i16)))))),
+            Some(")") => return Err(("unexpected `)`".to_string(), res)),
+            Some("T") => Lambda("x".to_string(), 0, box Lambda("y".to_string(), 0, box Variable("x".to_string(), 0))),
+            Some("F") => Lambda("x".to_string(), 0, box Lambda("y".to_string(), 0, box Variable("y".to_string(), 0))),
+            Some("S") => Lambda("w".to_string(), 0, box Lambda("y".to_string(), 0, box Lambda("x".to_string(), 0, box Call(box Variable("y".to_string(), 0), box Call(box Call(box Variable("w".to_string(), 0), box Variable("y".to_string(), 0)), box Variable("x".to_string(), 0)))))),
+            Some("Z") => Lambda("x".to_string(), 0i16, box Call(box Call(box Call(box Variable("x".to_string(), 0i16), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("y".to_string(), 0i16)))), box Lambda("x".to_string(), 0i16, box Call(box Call(box Variable("x".to_string(), 0i16), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("y".to_string(), 0i16)))), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("x".to_string(), 0i16)))))), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("y".to_string(), 0i16))))),
+            Some("*") => Lambda("x".to_string(), 0, box Lambda("y".to_string(), 0, box Lambda("z".to_string(), 0, box Call(box Variable("x".to_string(), 0), box Call(box Variable("y".to_string(), 0), box Variable("z".to_string(), 0)))))),
+            Some("&") => Lambda("x".to_string(), 0, box Lambda("y".to_string(), 0, box Call(box Call(box Variable("x".to_string(), 0), box Variable("y".to_string(), 0)), box Lambda("x".to_string(), 0, box Lambda("y".to_string(), 0, box Variable("y".to_string(), 0)))))),
+            Some("|") => Lambda("x".to_string(), 0, box Lambda("y".to_string(), 0, box Call(box Call(box Variable("x".to_string(), 0), box Lambda("x".to_string(), 0, box Lambda("y".to_string(), 0, box Variable("x".to_string(), 0)))), box Variable("y".to_string(), 0)))),
+            Some("!") => Lambda("x".to_string(), 0i16, box Call(box Call(box Variable("x".to_string(), 0i16), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("y".to_string(), 0i16)))), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("x".to_string(), 0i16))))),
+            Some("Y") => Lambda("y".to_string(), 0i16, box Call(box Lambda("x".to_string(), 0i16, box Call(box Variable("y".to_string(), 0i16), box Call(box Variable("x".to_string(), 0i16), box Variable("x".to_string(), 0i16)))), box Lambda("x".to_string(), 0i16, box Call(box Variable("y".to_string(), 0i16), box Call(box Variable("x".to_string(), 0i16), box Variable("x".to_string(), 0i16)))))),
             // XXX: remove when `P` works
-            // Some(~"func") => Lambda(~"p", 0i16, ~Lambda(~"z", 0i16, ~Call(~Call(~Variable(~"z", 0i16), ~Lambda(~"y", 0i16, ~Lambda(~"x", 0i16, ~Call(~Variable(~"y", 0i16), ~Call(~Call(~Call(~Variable(~"p", 0i16), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"x", 0i16)))), ~Variable(~"y", 0i16)), ~Variable(~"x", 0i16)))))), ~Call(~Variable(~"p", 0i16), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"x", 0i16))))))),
+            // Some("func") => Lambda("p".to_string(), 0i16, box Lambda("z".to_string(), 0i16, box Call(box Call(box Variable("z".to_string(), 0i16), box Call(box Lambda("w".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Lambda("x".to_string(), 0i16, box Call(box Variable("y".to_string(), 0i16), box Call(box Call(box Variable("w".to_string(), 0i16), box Variable("y".to_string(), 0i16)), box Variable("x".to_string(), 0i16)))))), box Call(box Variable("p".to_string(), 0i16), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("x".to_string(), 0i16)))))), box Call(box Variable("p".to_string(), 0i16), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("x".to_string(), 0i16))))))),
             // VERY STRANGE, does not work
-            // Some(~"P") => Lambda(~"n", 0i16, ~Call(~Call(~Call(~Variable(~"n", 0i16), ~Lambda(~"p", 0i16, ~Lambda(~"l", 0i16, ~Call(~Call(~Variable(~"l", 0i16), ~Call(~Variable(~"p", 0i16), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"y", 0i16))))), ~Call(~Lambda(~"w", 0i16, ~Lambda(~"y", 0i16, ~Lambda(~"x", 0i16, ~Call(~Variable(~"y", 0i16), ~Call(~Call(~Variable(~"w", 0i16), ~Variable(~"y", 0i16)), ~Variable(~"x", 0i16)))))), ~Call(~Variable(~"p", 0i16), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"y", 0i16))))))))), ~Lambda(~"z", 0i16, ~Call(~Call(~Variable(~"z", 0i16), ~Lambda(~"s", 0i16, ~Lambda(~"z", 0i16, ~Variable(~"z", 0i16)))), ~Lambda(~"s", 0i16, ~Lambda(~"z", 0i16, ~Variable(~"z", 0i16)))))), ~Lambda(~"x", 0i16, ~Lambda(~"y", 0i16, ~Variable(~"y", 0i16))))),
-            Some(ref num) if from_str::<uint>(num.clone()).is_some() => {
+            // Some("P") => Lambda("n".to_string(), 0i16, box Call(box Call(box Call(box Variable("n".to_string(), 0i16), box Lambda("p".to_string(), 0i16, box Lambda("l".to_string(), 0i16, box Call(box Call(box Variable("l".to_string(), 0i16), box Call(box Variable("p".to_string(), 0i16), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("y".to_string(), 0i16))))), box Call(box Lambda("w".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Lambda("x".to_string(), 0i16, box Call(box Variable("y".to_string(), 0i16), box Call(box Call(box Variable("w".to_string(), 0i16), box Variable("y".to_string(), 0i16)), box Variable("x".to_string(), 0i16)))))), box Call(box Variable("p".to_string(), 0i16), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("y".to_string(), 0i16))))))))), box Lambda("z".to_string(), 0i16, box Call(box Call(box Variable("z".to_string(), 0i16), box Lambda("s".to_string(), 0i16, box Lambda("z".to_string(), 0i16, box Variable("z".to_string(), 0i16)))), box Lambda("s".to_string(), 0i16, box Lambda("z".to_string(), 0i16, box Variable("z".to_string(), 0i16)))))), box Lambda("x".to_string(), 0i16, box Lambda("y".to_string(), 0i16, box Variable("y".to_string(), 0i16))))),
+            Some(num) if from_str::<uint>(num.clone()).is_some() => {
                 let nm = from_str::<int>(num.clone()).unwrap();
-                let mut numb = Variable(~"z", 0);
+                let mut numb = Variable("z".to_string(), 0);
                 for _ in range(0, nm) {
-                    numb = Call(~Variable(~"s", 0), ~numb);
+                    numb = Call(box Variable("s".to_string(), 0), box numb);
                 }
-                Lambda(~"s", 0, ~Lambda(~"z", 0, ~numb))
+                Lambda("s".to_string(), 0, box Lambda("z".to_string(), 0, box numb))
             },
-            Some(name) => Variable(name, 0),
-            None => return Err((~"", res)),
+            Some(name) => Variable(name.to_string(), 0),
+            None => return Err(("".to_string(), res)),
         };
         res = if res == Nothing {
                   next
               } else {
-                  Call(~res, ~next)
+                  Call(box res, box next)
               };
         tok = toki.next();
     }

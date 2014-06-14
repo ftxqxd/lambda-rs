@@ -1,6 +1,6 @@
-#[crate_id = "lambda#0.1"];
-#[crate_type = "lib"];
-#[feature(macro_rules)];
+#![crate_id = "lambda#0.2"]
+#![crate_type = "lib"]
+#![feature(macro_rules, phase)]
 
 //! A basic parser/reducer for the λ-calculus.
 //!
@@ -8,7 +8,7 @@
 //! [`LambdaExpr::`](enum.LambdaExpr.html)[`from_str`](enum.LambdaExpr.html#method.from_str).
 //! Reducing a λ-calculus expression is done by using
 //! [`LambdaExpr::`](enum.LambdaExpr.html)[`reduce`](enum.LambdaExpr.html#method.reduce).
-//! To convert a [`LambdaExpr`](enum.LambdaExpr.html) to a `~str`, use
+//! To convert a [`LambdaExpr`](enum.LambdaExpr.html) to a `String`, use
 //! [`LambdaExpr::`](enum.LambdaExpr.html)[`into_str`](enum.LambdaExpr.html#method.into_str).
 //!
 //! Example usage:
@@ -25,14 +25,21 @@
 //! }
 //! ~~~
 
+#[phase(plugin, link)]
+extern crate log;
+
 use std::from_str::FromStr;
+use std::fmt;
+use std::hash::hash;
 
 // TODO: fix `func \l.l 0 0`
 
 mod parse;
+#[cfg(test)]
+mod test;
 
 /// A λ-calculus expression.
-#[deriving(Eq, Clone)]
+#[deriving(PartialEq, Eq, Clone, Hash)]
 pub enum LambdaExpr {
     /// Nothing represents an empty λ-calculus expression.
     ///
@@ -44,14 +51,14 @@ pub enum LambdaExpr {
     /// The integer field represents the internal identifier for the
     /// variable (generated during α-reduction). This is 0 for unbound
     /// variables.
-    Variable(~str, i16),
+    Variable(String, i16),
     /// An expression called with another expression.
-    Call(~LambdaExpr, ~LambdaExpr),
+    Call(Box<LambdaExpr>, Box<LambdaExpr>),
     /// An anonymous function (lambda).
     ///
     /// The integer field represents the internal identifier for the
     /// parameter (generated during α-reduction).
-    Lambda(~str, i16, ~LambdaExpr),
+    Lambda(String, i16, Box<LambdaExpr>),
 }
 
 impl LambdaExpr {
@@ -69,20 +76,21 @@ impl LambdaExpr {
         };
         if *self != Nothing { f(self) }
     }
-    /// Create a new, α-renamed version of a λ-expression.
+
+    /// α-rename a λ-expression, consuming the original.
     ///
-    /// Α-renaming is the process of renaming variables to prevent name
+    /// α-renaming is the process of renaming variables to prevent name
     /// conflicts.
     ///
     /// This will not actually rename any variables; it will only change
     /// their internal identifier (the integer field in `Lambda`s and
     /// `Variable`s).
-    pub fn alpha_rename(&self) -> LambdaExpr {
+    pub fn alpha_rename(self) -> LambdaExpr {
         self.alpha_rename_n(1).val0()
     }
-    fn alpha_rename_n(&self, mut n: i16) -> (LambdaExpr, i16) {
-        let result = self.clone();
-        (match result {
+
+    fn alpha_rename_n(self, mut n: i16) -> (LambdaExpr, i16) {
+        (match self {
             Lambda(name, _, e) => {
                 let mut new_e = e;
                 new_e.traverse_mut(|ex| {
@@ -91,91 +99,100 @@ impl LambdaExpr {
                         _ => false,
                     };
                     if var {
-                        match ex.clone() {
-                            Variable(name2, _) =>
-                                if name2 == name.to_owned() {
-                                    *ex = Variable(name.to_owned(), n);
+                        let mut new = None;
+                        match *ex {
+                            Variable(ref name2, _) =>
+                                if name2.as_slice() == name.as_slice() {
+                                    new = Some(Variable(name.clone(), n));
                                 },
                             _ => (),
+                        }
+                        match new {
+                            Some(val) => *ex = val,
+                            None => {},
                         }
                     }
                 });
                 let oldn = n;
                 let (ee, en) = new_e.alpha_rename_n(n + 1);
                 n = en;
-                Lambda(name, oldn, ~ee)
+                Lambda(name, oldn, box ee)
             },
             Call(a, b) => {
                 let (a_e, a_n) = a.alpha_rename_n(n);
                 let (b_e, b_n) = b.alpha_rename_n(a_n);
                 n = b_n;
-                Call(~a_e, ~b_e)
+                Call(box a_e, box b_e)
             },
-            _ => result,
+            _ => self,
         }, n)
     }
-    /// Create a new, β-reduced version of a λ-expression.
+
+    /// β-reduce a λ-expression, consuming the original.
     ///
-    /// Β-reduction is the process of converting `(λx.e) a` to `e[x := a]`
+    /// β-reduction is the process of converting `(λx.e) a` to `e[x := a]`
     /// (i.e. replacing all occurences of the variable `x` in `e` with `a`).
-    pub fn beta_reduce(&self) -> LambdaExpr {
-        let result = self.clone();
-        match result {
-            Call(~Lambda(name, id, ~e), ~f) => {
-                let mut new_e = e;
-                new_e.traverse_mut(|ex| {
-                    if *ex == Variable(name.to_owned(), id) {
+    pub fn beta_reduce(self) -> LambdaExpr {
+        match self {
+            Call(box Lambda(name, id, box e), box f) => {
+                let mut e = e.beta_reduce();
+                e.traverse_mut(|ex| {
+                    if *ex == Variable(name.to_string(), id) {
                         *ex = f.clone();
                     }
                 });
-                new_e
+                e
             },
             Call(a, b) => {
-                Call(~a.beta_reduce(), ~b.beta_reduce())
+                Call(box a.beta_reduce(), box b.beta_reduce())
             },
             Lambda(name, id, e) => {
-                Lambda(name, id, ~e.beta_reduce())
+                Lambda(name, id, box e.beta_reduce())
             },
-            _ => result,
+            _ => self,
         }
     }
-    /// Create a new, η-converted version of a λ-expression.
+
+    /// η-convert a λ-expression, consuming the original.
     ///
-    /// Η-conversion is the process of converting `(λx.f x)` to `f`.
-    pub fn eta_convert(&self) -> LambdaExpr {
-        let result = self.clone();
-        match result {
-            Lambda(name, id, ~Call(e, ~Variable(name2, id2))) => {
-                if name == name2 && id == id2 { return *e; }
-            },
-            Call(a, b) => {
-                return Call(~a.eta_convert(), ~b.eta_convert());
-            },
-            Lambda(name, id, e) => {
-                return Lambda(name, id, ~e.eta_convert());
-            },
-            _ => return result,
-        };
-        self.clone()
+    /// η-conversion is the process of converting `(λx.f x)` to `f`.
+
+    // TODO: fix bad behaviour
+    #[experimental = "buggy (`(\\x.x x)` converts to `x`)"]
+    pub fn eta_convert(self) -> LambdaExpr {
+        #![allow(experimental)]
+        // return self;
+        match self {
+            Lambda(name, id, box Call(e, box Variable(name2, id2))) =>
+                if name == name2 && id == id2 {
+                    *e
+                } else {
+                    Lambda(name, id, box Call(e, box Variable(name2, id2)))
+                },
+            Call(a, b) =>
+                Call(box a.eta_convert(), box b.eta_convert()),
+            Lambda(name, id, e) =>
+                Lambda(name, id, box e.eta_convert()),
+            _ => self,
+        }
     }
-    /// Reduce a λ-expression as much as possible.
+    
+
+    /// Reduce a λ-expression as much as possible, consuming the original.
     ///
-    /// This is done by repeatedly calling `beta_reduce` unless it makes no
-    /// difference, in which case it calls `eta_reduce`. If that makes no
-    /// difference, return; otherwise, repeat.
-    pub fn reduce(&self) -> LambdaExpr {
-        // TODO: make less terrible (too much `.clone()`!)
-        let mut oldcurr;
+    /// This is done by repeatedly calling `beta_reduce` until it makes no difference.
+    pub fn reduce(self) -> LambdaExpr {
+        let mut oldhash;
         let mut curr = self.alpha_rename();
-        // Is this really the best way to do it?
         loop {
-            oldcurr = curr.clone();
+            debug!("Reduce: {}", curr);
+            oldhash = hash(&curr);
             curr = curr.beta_reduce();
-            if curr == oldcurr {
-                curr = curr.eta_convert();
-                if curr == oldcurr {
-                    break;
-                }
+            if hash(&curr) == oldhash {
+                // curr = curr.eta_convert();
+                // if hash(&curr) == oldhash {
+                break;
+                // }
             }
         }
         curr
@@ -187,11 +204,11 @@ impl FromStr for LambdaExpr {
     ///
     /// The grammar for such expressions is roughly as follows:
     ///
-    /// ~~~.notrust
+    /// box box box .notrust
     /// expr ::= <lambda> | <IDENT> | <call> | '(' <expr> ')'
     /// lambda ::= ('\\' | 'λ') <IDENT>+ '.' <expr>
     /// call ::= <expr> <expr>
-    /// ~~~
+    /// box box box 
     /// 
     /// Some constants are also provided:
     ///
@@ -203,24 +220,36 @@ impl FromStr for LambdaExpr {
     /// * Logical operators (`&`, `|`, `!`)
     /// * [Fixed-point combinator](https://en.wikipedia.org/wiki/Fixed-point_combinator) (`Y`)
     fn from_str(s: &str) -> Option<LambdaExpr> {
-        parse::parse(&mut parse::tokenise(s).move_iter()).ok()
+        parse::parse(&mut parse::tokenise(s).iter().map(|x| x.as_slice())).ok()
     }
 }
 
-impl IntoStr for LambdaExpr {
-    /// Convert a `LambdaExpr` into a string, consuming it in the process.
+impl fmt::Show for LambdaExpr {
+    /// Format a `LambdaExpr`.
     ///
     /// The syntax for such a string is the same as for `from_str`, but
     /// prefers to use `λ` in lambda declarations (rather than `\`);
     /// does not use special names for constants, using their fully expanded
     /// form instead; and fully parenthesises all expressions.
-    fn into_str(self) -> ~str {
-        match self {
-            Nothing => ~"",
-            Variable(a, _) => a,
-            Call(a, b) => format!("({} {})", a.into_str(), b.into_str()),
-            Lambda(name, _, expr) =>
-                format!("(λ{}.{})", name, expr.into_str()),
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Nothing => write!(f, ""),
+            Variable(ref a, _) => write!(f, "{}", a),
+            Call(ref a, ref b) => write!(f, "({} {})", a, b),
+            Lambda(ref name, _, ref expr) =>
+                write!(f, "(λ{}.{})", name, expr),
+        }
+    }
+}
+
+impl LambdaExpr {
+    pub fn repr(&self) -> String {
+        match *self {
+            Nothing => format!("Nothing"),
+            Variable(ref a, id) => format!("Variable(\"{}\".to_string(), {}i16)", a, id),
+            Call(ref a, ref b) => format!("Call(box {}, box {})", a.repr(), b.repr()),
+            Lambda(ref name, id, ref expr) =>
+                format!("Lambda(\"{}\".to_string(), {}i16, box {})", name, id, expr.repr()),
         }
     }
 }
